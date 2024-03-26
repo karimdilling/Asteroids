@@ -1,5 +1,6 @@
 package main
 
+import "core:math"
 import rl "vendor:raylib"
 
 SCREEN_WIDTH :: 1024
@@ -11,45 +12,36 @@ main :: proc() {
 
 	rl.SetTargetFPS(60)
 
-	player := Space_Ship{{{300, 300}, {325, 300}, {312.5, 270}}}
+	player := Space_Ship{{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}, 0, {0, 1}}
 	projectile_list := make([dynamic]Projectile)
 
 	for !rl.WindowShouldClose() {
 		check_input(&player, &projectile_list)
-		update_projectile_positions(&projectile_list, 3)
+		update_projectile_positions(&projectile_list, 5)
 		draw_game(&player, &projectile_list)
 	}
 }
 
 check_input :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
+	dir_angle := player.angle - math.PI * 0.5
+	player.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
 	if rl.IsKeyDown(.LEFT) {
-		player.position[0].x -= 5
-		player.position[1].x -= 5
-		player.position[2].x -= 5
+		player.angle -= rl.DEG2RAD * 5
 	}
 	if rl.IsKeyDown(.RIGHT) {
-		player.position[0].x += 5
-		player.position[1].x += 5
-		player.position[2].x += 5
-	}
-	if rl.IsKeyDown(.DOWN) {
-		player.position[0].y += 5
-		player.position[1].y += 5
-		player.position[2].y += 5
+		player.angle += rl.DEG2RAD * 5
 	}
 	if rl.IsKeyDown(.UP) {
-		player.position[0].y -= 5
-		player.position[1].y -= 5
-		player.position[2].y -= 5
+		player.position += player.direction * 3
 	}
 	if rl.IsKeyPressed(.SPACE) {
 		spawn_projectile(player, projectile_list)
 	}
 }
 
-update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: i32) {
+update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: f32) {
 	for projectile in projectiles {
-		projectile.position.y -= projectile_speed
+		projectile.position += projectile_speed * projectile.direction
 	}
 }
 
@@ -63,31 +55,35 @@ draw_game :: proc(player: ^Space_Ship, projectiles: ^[dynamic]Projectile) {
 }
 
 Space_Ship :: struct {
-	position: [3]rl.Vector2,
+	position:  rl.Vector2,
+	angle:     f32,
+	direction: rl.Vector2,
 }
 
 draw_space_ship :: proc(space_ship: ^Space_Ship) {
-	rl.DrawTriangleLines(
-		space_ship.position[0],
-		space_ship.position[1],
-		space_ship.position[2],
-		rl.WHITE,
-	)
+	points: [3]rl.Vector2 = {{-1, 1}, {1, 1}, {0, -1}}
+	scale: f32 = 10
+	point1 := space_ship.position + rl.Vector2Rotate(points[0] * scale, space_ship.angle)
+	point2 := space_ship.position + rl.Vector2Rotate(points[1] * scale, space_ship.angle)
+	point3 := space_ship.position + rl.Vector2Rotate(points[2] * scale, space_ship.angle)
+	rl.DrawTriangleLines(point1, point2, point3, rl.WHITE)
 }
 
 Projectile :: struct {
-	position: [2]i32,
+	position:  rl.Vector2,
+	direction: rl.Vector2,
 }
 
 spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
 	projectile_position := Projectile {
-		{cast(i32)space_ship.position[2].x, cast(i32)space_ship.position[2].y},
+		{space_ship.position.x, space_ship.position.y},
+		space_ship.direction,
 	}
 	append(projectile_list, projectile_position)
 }
 
 draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile) {
 	for projectile in projectile_list {
-		rl.DrawCircle(projectile.position.x, projectile.position.y, 2, rl.RED)
+		rl.DrawCircle(cast(i32)projectile.position.x, cast(i32)projectile.position.y, 2, rl.RED)
 	}
 }
