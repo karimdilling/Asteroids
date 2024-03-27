@@ -19,15 +19,22 @@ main :: proc() {
 		{0, 0},
 	}
 	projectile_list := make([dynamic]Projectile)
+	asteroid_list := make([dynamic]Asteroid)
+
+	generate_asteroids(&asteroid_list)
 
 	for !rl.WindowShouldClose() {
-		update_game(&player, &projectile_list)
+		update_game(&player, &projectile_list, &asteroid_list)
 		update_projectile_positions(&projectile_list, 10)
-		draw_game(&player, &projectile_list)
+		draw_game(&player, &projectile_list, &asteroid_list)
 	}
 }
 
-update_game :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
+update_game :: proc(
+	player: ^Space_Ship,
+	projectile_list: ^[dynamic]Projectile,
+	asteroid_list: ^[dynamic]Asteroid,
+) {
 	handle_out_of_screen(player)
 
 	dir_angle := player.angle - math.PI * 0.5
@@ -36,6 +43,8 @@ update_game :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) 
 	DRAG :: 0.03
 	player.velocity *= (1 - DRAG)
 	player.position += player.velocity
+
+	update_asteroids(asteroid_list)
 
 	if rl.IsKeyDown(.LEFT) {
 		player.angle -= rl.DEG2RAD * 5
@@ -57,13 +66,18 @@ update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectil
 	}
 }
 
-draw_game :: proc(player: ^Space_Ship, projectiles: ^[dynamic]Projectile) {
+draw_game :: proc(
+	player: ^Space_Ship,
+	projectiles: ^[dynamic]Projectile,
+	asteroids: ^[dynamic]Asteroid,
+) {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
 	draw_space_ship(player)
 	draw_projectiles(projectiles)
+	draw_asteroids(asteroids)
 }
 
 handle_out_of_screen :: proc(player: ^Space_Ship) {
@@ -112,5 +126,69 @@ spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Pro
 draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile) {
 	for projectile in projectile_list {
 		rl.DrawCircle(cast(i32)projectile.position.x, cast(i32)projectile.position.y, 2, rl.RED)
+	}
+}
+
+Asteroid :: struct {
+	position: rl.Vector2,
+	velocity: rl.Vector2,
+	type:     Asteroid_Size,
+	radius:   f32,
+	sides:    i32,
+	angle:    f32,
+}
+
+Asteroid_Size :: enum {
+	big,
+	small,
+}
+
+generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
+	for _ in 0 ..< 10 {
+		position: rl.Vector2 =  {
+			f32(rl.GetRandomValue(0, rl.GetScreenWidth())),
+			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
+		}
+		velocity: rl.Vector2 = {f32(rl.GetRandomValue(1, 3)), f32(rl.GetRandomValue(1, 3))}
+		radius := f32(rl.GetRandomValue(30, 50))
+		sides := rl.GetRandomValue(5, 10)
+		angle := f32(rl.GetRandomValue(0, 360))
+
+		asteroid := Asteroid{position, velocity, Asteroid_Size.big, radius, sides, angle}
+		append(asteroid_list, asteroid)
+	}
+}
+
+update_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
+	for &asteroid in asteroid_list {
+		asteroid.angle += 1
+		asteroid.position += asteroid.velocity
+		handle_out_of_screen_asteroids(&asteroid)
+	}
+}
+
+handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
+	if asteroid.position.x > f32(rl.GetScreenWidth()) {
+		asteroid.position.x = 0
+	} else if asteroid.position.x < 0 {
+		asteroid.position.x = f32(rl.GetScreenWidth())
+	}
+
+	if asteroid.position.y > f32(rl.GetScreenHeight()) {
+		asteroid.position.y = 0
+	} else if asteroid.position.y < 0 {
+		asteroid.position.y = f32(rl.GetScreenHeight())
+	}
+}
+
+draw_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
+	for &asteroid in asteroid_list {
+		rl.DrawPolyLines(
+			asteroid.position,
+			asteroid.sides,
+			asteroid.radius,
+			asteroid.angle,
+			rl.WHITE,
+		)
 	}
 }
