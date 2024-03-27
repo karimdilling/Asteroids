@@ -28,6 +28,8 @@ main :: proc() {
 }
 
 update_game :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
+	handle_out_of_screen(player)
+
 	dir_angle := player.angle - math.PI * 0.5
 	player.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
 
@@ -62,6 +64,20 @@ draw_game :: proc(player: ^Space_Ship, projectiles: ^[dynamic]Projectile) {
 	rl.ClearBackground(rl.BLACK)
 	draw_space_ship(player)
 	draw_projectiles(projectiles)
+}
+
+handle_out_of_screen :: proc(player: ^Space_Ship) {
+	if player.position.x > f32(rl.GetScreenWidth()) {
+		player.position.x = 0
+	} else if player.position.x < 0 {
+		player.position.x = f32(rl.GetScreenWidth())
+	}
+
+	if player.position.y > f32(rl.GetScreenHeight()) {
+		player.position.y = 0
+	} else if player.position.y < 0 {
+		player.position.y = f32(rl.GetScreenHeight())
+	}
 }
 
 Space_Ship :: struct {
