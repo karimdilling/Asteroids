@@ -12,19 +12,29 @@ main :: proc() {
 
 	rl.SetTargetFPS(60)
 
-	player := Space_Ship{{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)}, 0, {0, 1}}
+	player := Space_Ship {
+		{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+		0,
+		{0, 1},
+		{0, 0},
+	}
 	projectile_list := make([dynamic]Projectile)
 
 	for !rl.WindowShouldClose() {
-		check_input(&player, &projectile_list)
-		update_projectile_positions(&projectile_list, 5)
+		update_game(&player, &projectile_list)
+		update_projectile_positions(&projectile_list, 10)
 		draw_game(&player, &projectile_list)
 	}
 }
 
-check_input :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
+update_game :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
 	dir_angle := player.angle - math.PI * 0.5
 	player.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
+
+	DRAG :: 0.03
+	player.velocity *= (1 - DRAG)
+	player.position += player.velocity
+
 	if rl.IsKeyDown(.LEFT) {
 		player.angle -= rl.DEG2RAD * 5
 	}
@@ -32,7 +42,7 @@ check_input :: proc(player: ^Space_Ship, projectile_list: ^[dynamic]Projectile) 
 		player.angle += rl.DEG2RAD * 5
 	}
 	if rl.IsKeyDown(.UP) {
-		player.position += player.direction * 3
+		player.velocity += player.direction * 0.5
 	}
 	if rl.IsKeyPressed(.SPACE) {
 		spawn_projectile(player, projectile_list)
@@ -58,6 +68,7 @@ Space_Ship :: struct {
 	position:  rl.Vector2,
 	angle:     f32,
 	direction: rl.Vector2,
+	velocity:  rl.Vector2,
 }
 
 draw_space_ship :: proc(space_ship: ^Space_Ship) {
