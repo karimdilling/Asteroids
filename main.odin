@@ -5,6 +5,7 @@ import rl "vendor:raylib"
 
 SCREEN_WIDTH :: 1024
 SCREEN_HEIGHT :: 768
+GAME_OVER := false
 
 main :: proc() {
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids")
@@ -17,9 +18,12 @@ main :: proc() {
 		0,
 		{0, 1},
 		{0, 0},
+		0,
 	}
 	projectile_list := make([dynamic]Projectile)
+	defer delete(projectile_list)
 	asteroid_list := make([dynamic]Asteroid)
+	defer delete(asteroid_list)
 
 	generate_asteroids(&asteroid_list)
 
@@ -27,6 +31,37 @@ main :: proc() {
 		update_game(&player, &projectile_list, &asteroid_list)
 		update_projectile_positions(&projectile_list, 10)
 		draw_game(&player, &projectile_list, &asteroid_list)
+	}
+}
+
+handle_game_over :: proc(
+	player: ^Space_Ship,
+	projectile_list: ^[dynamic]Projectile,
+	asteroid_list: ^[dynamic]Asteroid,
+) {
+	font_size: i32 = 50
+	text: cstring = "Game Over"
+	rl.DrawText(
+		text,
+		rl.GetScreenWidth() / 2 - rl.MeasureText(text, font_size) / 2,
+		rl.GetScreenHeight() / 2 - font_size / 2,
+		font_size,
+		rl.RED,
+	)
+
+	if player.death_time != 0.0 && rl.GetTime() - player.death_time > 3.0 {
+		clear(projectile_list)
+		clear(asteroid_list)
+		player^ =  {
+			{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+			0,
+			{0, 1},
+			{0, 0},
+			0,
+		}
+		generate_asteroids(asteroid_list)
+		player.death_time = 0
+		GAME_OVER = false
 	}
 }
 
@@ -44,19 +79,26 @@ update_game :: proc(
 	player.velocity *= (1 - DRAG)
 	player.position += player.velocity
 
-	update_asteroids(asteroid_list)
+	update_asteroids(asteroid_list, projectile_list)
+	if !GAME_OVER do check_space_ship_collision(player, asteroid_list)
 
-	if rl.IsKeyDown(.LEFT) {
-		player.angle -= rl.DEG2RAD * 5
+	if !GAME_OVER {
+		if rl.IsKeyDown(.LEFT) {
+			player.angle -= rl.DEG2RAD * 5
+		}
+		if rl.IsKeyDown(.RIGHT) {
+			player.angle += rl.DEG2RAD * 5
+		}
+		if rl.IsKeyDown(.UP) {
+			player.velocity += player.direction * 0.5
+		}
+		if rl.IsKeyPressed(.SPACE) {
+			spawn_projectile(player, projectile_list)
+		}
 	}
-	if rl.IsKeyDown(.RIGHT) {
-		player.angle += rl.DEG2RAD * 5
-	}
-	if rl.IsKeyDown(.UP) {
-		player.velocity += player.direction * 0.5
-	}
-	if rl.IsKeyPressed(.SPACE) {
-		spawn_projectile(player, projectile_list)
+
+	if GAME_OVER {
+		handle_game_over(player, projectile_list, asteroid_list)
 	}
 }
 
@@ -75,7 +117,7 @@ draw_game :: proc(
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
-	draw_space_ship(player)
+	if !GAME_OVER do draw_space_ship(player)
 	draw_projectiles(projectiles)
 	draw_asteroids(asteroids)
 }
@@ -95,10 +137,26 @@ handle_out_of_screen :: proc(player: ^Space_Ship) {
 }
 
 Space_Ship :: struct {
-	position:  rl.Vector2,
-	angle:     f32,
-	direction: rl.Vector2,
-	velocity:  rl.Vector2,
+	position:   rl.Vector2,
+	angle:      f32,
+	direction:  rl.Vector2,
+	velocity:   rl.Vector2,
+	death_time: f64,
+}
+
+check_space_ship_collision :: proc(space_ship: ^Space_Ship, asteroid_list: ^[dynamic]Asteroid) {
+	for &asteroid in asteroid_list {
+		collided := rl.CheckCollisionCircles(
+			space_ship.position,
+			5,
+			asteroid.position,
+			asteroid.radius,
+		)
+		if collided {
+			GAME_OVER = true
+			space_ship.death_time = rl.GetTime()
+		}
+	}
 }
 
 draw_space_ship :: proc(space_ship: ^Space_Ship) {
@@ -159,12 +217,16 @@ generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	}
 }
 
-update_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
+update_asteroids :: proc(
+	asteroid_list: ^[dynamic]Asteroid,
+	projectile_list: ^[dynamic]Projectile,
+) {
 	for &asteroid in asteroid_list {
 		asteroid.angle += 1
 		asteroid.position += asteroid.velocity
 		handle_out_of_screen_asteroids(&asteroid)
 	}
+	check_laser_collision(projectile_list, asteroid_list)
 }
 
 handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
@@ -190,5 +252,21 @@ draw_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 			asteroid.angle,
 			rl.WHITE,
 		)
+	}
+}
+
+check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dynamic]Asteroid) {
+	for &projectile, i in projectiles {
+		for &asteroid, j in asteroids {
+			collided := rl.CheckCollisionPointCircle(
+				projectile.position,
+				asteroid.position,
+				asteroid.radius,
+			)
+			if collided {
+				unordered_remove(projectiles, i)
+				unordered_remove(asteroids, j)
+			}
+		}
 	}
 }
