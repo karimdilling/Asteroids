@@ -108,7 +108,7 @@ update_game :: proc(
 }
 
 update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: f32) {
-	for projectile in projectiles {
+	for &projectile in projectiles {
 		projectile.position += projectile_speed * projectile.direction
 	}
 }
@@ -200,26 +200,46 @@ Asteroid :: struct {
 
 Asteroid_Size :: enum {
 	big,
+	medium,
 	small,
 }
 
 generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	for _ in 0 ..< 10 {
-		position: rl.Vector2 =  {
-			f32(rl.GetRandomValue(0, rl.GetScreenWidth())),
-			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
-		}
-		velocity: rl.Vector2 = {f32(rl.GetRandomValue(-3, 3)), f32(rl.GetRandomValue(-3, 3))}
-		if velocity.x == 0 do velocity.x = 1
-		if velocity.y == 0 do velocity.y = 1
-		radius := f32(rl.GetRandomValue(30, 50))
-		sides := rl.GetRandomValue(5, 10)
-		angle := f32(rl.GetRandomValue(0, 360))
-
-		asteroid := Asteroid{position, velocity, Asteroid_Size.big, radius, sides, angle}
+		asteroid := generate_single_asteroid(Asteroid_Size.big)
 		append(asteroid_list, asteroid)
 	}
 }
+
+generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {}) -> Asteroid {
+	position := position
+	velocity: rl.Vector2
+	angle := f32(rl.GetRandomValue(0, 360))
+	sides := rl.GetRandomValue(5, 10)
+	radius: f32
+
+	switch type {
+	case .big:
+		position =  {
+			f32(rl.GetRandomValue(0, rl.GetScreenWidth())),
+			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
+		}
+		velocity = {f32(rl.GetRandomValue(-2, 2)), f32(rl.GetRandomValue(-2, 2))}
+		radius = f32(rl.GetRandomValue(30, 50))
+	case .medium:
+		velocity = {f32(rl.GetRandomValue(-3, 3)), f32(rl.GetRandomValue(-3, 3))}
+		radius = f32(rl.GetRandomValue(20, 25))
+	case .small:
+		velocity = {f32(rl.GetRandomValue(-4, 4)), f32(rl.GetRandomValue(-4, 4))}
+		radius = f32(rl.GetRandomValue(10, 15))
+	}
+
+	if velocity.x == 0 do velocity.x = 1
+	if velocity.y == 0 do velocity.y = 1
+
+	return Asteroid{position, velocity, type, radius, sides, angle}
+}
+
 
 update_asteroids :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
@@ -268,8 +288,21 @@ check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dy
 				asteroid.radius,
 			)
 			if collided {
+				#partial switch asteroid.type {
+				case .big:
+					asteroid1 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
+					asteroid2 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
+					append(asteroids, asteroid1, asteroid2)
+				case .medium:
+					asteroid1 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
+					asteroid2 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
+					append(asteroids, asteroid1, asteroid2)
+				}
+
 				unordered_remove(projectiles, i)
 				unordered_remove(asteroids, j)
+
+				return
 			}
 		}
 	}
