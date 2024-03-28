@@ -69,6 +69,10 @@ update_game :: proc(
 	projectile_list: ^[dynamic]Projectile,
 	asteroid_list: ^[dynamic]Asteroid,
 ) {
+	if len(asteroid_list) == 0 {
+		generate_asteroids(asteroid_list)
+	}
+
 	handle_out_of_screen(player)
 
 	dir_angle := player.angle - math.PI * 0.5
@@ -208,7 +212,9 @@ generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 			f32(rl.GetRandomValue(0, rl.GetScreenWidth())),
 			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
 		}
-		velocity: rl.Vector2 = {f32(rl.GetRandomValue(1, 3)), f32(rl.GetRandomValue(1, 3))}
+		velocity: rl.Vector2 = {f32(rl.GetRandomValue(-3, 3)), f32(rl.GetRandomValue(-3, 3))}
+		if velocity.x == 0 do velocity.x = 1
+		if velocity.y == 0 do velocity.y = 1
 		radius := f32(rl.GetRandomValue(30, 50))
 		sides := rl.GetRandomValue(5, 10)
 		angle := f32(rl.GetRandomValue(0, 360))
