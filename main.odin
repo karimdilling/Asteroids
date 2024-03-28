@@ -179,11 +179,8 @@ Projectile :: struct {
 }
 
 spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
-	projectile_position := Projectile {
-		{space_ship.position.x, space_ship.position.y},
-		space_ship.direction,
-	}
-	append(projectile_list, projectile_position)
+	projectile := Projectile{{space_ship.position.x, space_ship.position.y}, space_ship.direction}
+	append(projectile_list, projectile)
 }
 
 draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile) {
