@@ -29,7 +29,6 @@ main :: proc() {
 
 	for !rl.WindowShouldClose() {
 		update_game(&player, &projectile_list, &asteroid_list)
-		update_projectile_positions(&projectile_list, 10)
 		draw_game(&player, &projectile_list, &asteroid_list)
 	}
 }
@@ -79,7 +78,9 @@ update_game :: proc(
 	player.velocity *= (1 - DRAG)
 	player.position += player.velocity
 
+	update_projectile_positions(projectile_list, 10)
 	update_asteroids(asteroid_list, projectile_list)
+
 	if !GAME_OVER do check_space_ship_collision(player, asteroid_list)
 
 	if !GAME_OVER {
