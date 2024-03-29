@@ -269,11 +269,12 @@ handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
 
 draw_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	for &asteroid in asteroid_list {
-		rl.DrawPolyLines(
+		rl.DrawPolyLinesEx(
 			asteroid.position,
 			asteroid.sides,
 			asteroid.radius,
 			asteroid.angle,
+			asteroid.type == .big ? 3 : asteroid.type == .medium ? 2 : 1,
 			rl.WHITE,
 		)
 	}
