@@ -1,11 +1,13 @@
 package main
 
+import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
 
 SCREEN_WIDTH :: 1024
 SCREEN_HEIGHT :: 768
 GAME_OVER := false
+POINTS := 0
 
 main :: proc() {
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids")
@@ -30,6 +32,7 @@ main :: proc() {
 	for !rl.WindowShouldClose() {
 		update_game(&player, &projectile_list, &asteroid_list)
 		draw_game(&player, &projectile_list, &asteroid_list)
+		free_all(context.temp_allocator)
 	}
 }
 
@@ -40,10 +43,14 @@ handle_game_over :: proc(
 ) {
 	font_size: i32 = 50
 	text: cstring = "Game Over"
+	horizontal_center := rl.GetScreenWidth() / 2 - rl.MeasureText(text, font_size) / 2
+	vertical_center := rl.GetScreenHeight() / 2 - font_size / 2
+	rl.DrawText(text, horizontal_center, vertical_center, font_size, rl.RED)
+	points_reached_text := fmt.ctprintf("Points: %d", POINTS)
 	rl.DrawText(
-		text,
-		rl.GetScreenWidth() / 2 - rl.MeasureText(text, font_size) / 2,
-		rl.GetScreenHeight() / 2 - font_size / 2,
+		points_reached_text,
+		horizontal_center,
+		vertical_center + font_size,
 		font_size,
 		rl.RED,
 	)
@@ -60,6 +67,7 @@ handle_game_over :: proc(
 		}
 		generate_asteroids(asteroid_list)
 		player.death_time = 0
+		POINTS = 0
 		GAME_OVER = false
 	}
 }
@@ -125,6 +133,11 @@ draw_game :: proc(
 	if !GAME_OVER do draw_space_ship(player)
 	draw_projectiles(projectiles)
 	draw_asteroids(asteroids)
+	draw_points()
+}
+
+draw_points :: proc() {
+	rl.DrawText(fmt.ctprintf("Points: %d", POINTS), 0, 0, 30, rl.WHITE)
 }
 
 handle_out_of_screen :: proc(player: ^Space_Ship) {
@@ -240,7 +253,6 @@ generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {})
 	return Asteroid{position, velocity, type, radius, sides, angle}
 }
 
-
 update_asteroids :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	projectile_list: ^[dynamic]Projectile,
@@ -289,15 +301,19 @@ check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dy
 				asteroid.radius,
 			)
 			if collided {
-				#partial switch asteroid.type {
+				switch asteroid.type {
 				case .big:
+					if !GAME_OVER do POINTS += 20
 					asteroid1 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
 					append(asteroids, asteroid1, asteroid2)
 				case .medium:
+					if !GAME_OVER do POINTS += 50
 					asteroid1 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
 					append(asteroids, asteroid1, asteroid2)
+				case .small:
+					if !GAME_OVER do POINTS += 100
 				}
 
 				unordered_remove(projectiles, i)
