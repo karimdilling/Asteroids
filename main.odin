@@ -26,12 +26,15 @@ main :: proc() {
 	defer delete(projectile_list)
 	asteroid_list := make([dynamic]Asteroid)
 	defer delete(asteroid_list)
+	alien_projectile_list := make([dynamic]Projectile)
+	defer delete(alien_projectile_list)
 
 	generate_asteroids(&asteroid_list)
+	alien := init_alien()
 
 	for !rl.WindowShouldClose() {
-		update_game(&player, &projectile_list, &asteroid_list)
-		draw_game(&player, &projectile_list, &asteroid_list)
+		update_game(&player, &projectile_list, &asteroid_list, &alien, &alien_projectile_list)
+		draw_game(&player, &projectile_list, &asteroid_list, &alien, &alien_projectile_list)
 		free_all(context.temp_allocator)
 	}
 }
@@ -40,6 +43,7 @@ handle_game_over :: proc(
 	player: ^Space_Ship,
 	projectile_list: ^[dynamic]Projectile,
 	asteroid_list: ^[dynamic]Asteroid,
+	alien: ^Alien,
 ) {
 	font_size: i32 = 50
 	text: cstring = "Game Over"
@@ -67,6 +71,7 @@ handle_game_over :: proc(
 		}
 		generate_asteroids(asteroid_list)
 		player.death_time = 0
+		despawn_alien(alien)
 		POINTS = 0
 		GAME_OVER = false
 	}
@@ -76,6 +81,8 @@ update_game :: proc(
 	player: ^Space_Ship,
 	projectile_list: ^[dynamic]Projectile,
 	asteroid_list: ^[dynamic]Asteroid,
+	alien: ^Alien,
+	alien_projectile_list: ^[dynamic]Projectile,
 ) {
 	if len(asteroid_list) == 0 {
 		generate_asteroids(asteroid_list)
@@ -91,9 +98,13 @@ update_game :: proc(
 	player.position += player.velocity
 
 	update_projectile_positions(projectile_list, 10)
-	update_asteroids(asteroid_list, projectile_list)
+	update_asteroids(asteroid_list, projectile_list, alien_projectile_list, alien)
+	update_alien(alien)
+	spawn_alien_projectile(alien, player, alien_projectile_list)
+	update_alien_projectile_positions(alien_projectile_list, 5)
 
-	if !GAME_OVER do check_space_ship_collision(player, asteroid_list)
+	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list)
+	check_alien_collision(alien, player, asteroid_list)
 
 	if !GAME_OVER {
 		if rl.IsKeyDown(.LEFT) {
@@ -111,13 +122,7 @@ update_game :: proc(
 	}
 
 	if GAME_OVER {
-		handle_game_over(player, projectile_list, asteroid_list)
-	}
-}
-
-update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: f32) {
-	for &projectile in projectiles {
-		projectile.position += projectile_speed * projectile.direction
+		handle_game_over(player, projectile_list, asteroid_list, alien)
 	}
 }
 
@@ -125,14 +130,18 @@ draw_game :: proc(
 	player: ^Space_Ship,
 	projectiles: ^[dynamic]Projectile,
 	asteroids: ^[dynamic]Asteroid,
+	alien: ^Alien,
+	alien_projectiles: ^[dynamic]Projectile,
 ) {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
 	if !GAME_OVER do draw_space_ship(player)
-	draw_projectiles(projectiles)
+	draw_projectiles(projectiles, rl.RED)
 	draw_asteroids(asteroids)
+	draw_alien(alien)
+	draw_projectiles(alien_projectiles, rl.WHITE)
 	draw_points()
 }
 
@@ -162,18 +171,50 @@ Space_Ship :: struct {
 	death_time: f64,
 }
 
-check_space_ship_collision :: proc(space_ship: ^Space_Ship, asteroid_list: ^[dynamic]Asteroid) {
+check_space_ship_collision :: proc(
+	space_ship: ^Space_Ship,
+	asteroid_list: ^[dynamic]Asteroid,
+	alien: ^Alien,
+	alien_projectile_list: ^[dynamic]Projectile,
+) {
+	space_ship_radius: f32 = 5
 	for &asteroid in asteroid_list {
 		collided := rl.CheckCollisionCircles(
 			space_ship.position,
-			5,
+			space_ship_radius,
 			asteroid.position,
 			asteroid.radius,
 		)
 		if collided {
 			GAME_OVER = true
 			space_ship.death_time = rl.GetTime()
+			return
 		}
+	}
+
+	for &alien_projectile, i in alien_projectile_list {
+		collided := rl.CheckCollisionCircles(
+			space_ship.position,
+			space_ship_radius,
+			alien_projectile.position,
+			2,
+		)
+		if collided {
+			GAME_OVER = true
+			space_ship.death_time = rl.GetTime()
+			unordered_remove(alien_projectile_list, i)
+			return
+		}
+	}
+
+	collided_with_alien := rl.CheckCollisionCircleRec(
+		space_ship.position,
+		space_ship_radius,
+		alien.hit_box,
+	)
+	if collided_with_alien {
+		GAME_OVER = true
+		space_ship.death_time = rl.GetTime()
 	}
 }
 
@@ -196,9 +237,15 @@ spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Pro
 	append(projectile_list, projectile)
 }
 
-draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile) {
+update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: f32) {
+	for &projectile in projectiles {
+		projectile.position += projectile_speed * projectile.direction
+	}
+}
+
+draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile, color: rl.Color) {
 	for projectile in projectile_list {
-		rl.DrawCircle(cast(i32)projectile.position.x, cast(i32)projectile.position.y, 2, rl.RED)
+		rl.DrawCircle(cast(i32)projectile.position.x, cast(i32)projectile.position.y, 2, color)
 	}
 }
 
@@ -256,13 +303,16 @@ generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {})
 update_asteroids :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	projectile_list: ^[dynamic]Projectile,
+	alien_projectile_list: ^[dynamic]Projectile,
+	alien: ^Alien,
 ) {
 	for &asteroid in asteroid_list {
 		asteroid.angle += 1
 		asteroid.position += asteroid.velocity
 		handle_out_of_screen_asteroids(&asteroid)
 	}
-	check_laser_collision(projectile_list, asteroid_list)
+	check_laser_collision(projectile_list, asteroid_list, false, alien)
+	check_laser_collision(alien_projectile_list, asteroid_list, true, nil)
 }
 
 handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
@@ -292,7 +342,12 @@ draw_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	}
 }
 
-check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dynamic]Asteroid) {
+check_laser_collision :: proc(
+	projectiles: ^[dynamic]Projectile,
+	asteroids: ^[dynamic]Asteroid,
+	projectile_from_alien: bool = false,
+	alien: ^Alien,
+) {
 	for &projectile, i in projectiles {
 		for &asteroid, j in asteroids {
 			collided := rl.CheckCollisionPointCircle(
@@ -303,17 +358,17 @@ check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dy
 			if collided {
 				switch asteroid.type {
 				case .big:
-					if !GAME_OVER do POINTS += 20
+					if !projectile_from_alien && !GAME_OVER do POINTS += 20
 					asteroid1 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
 					append(asteroids, asteroid1, asteroid2)
 				case .medium:
-					if !GAME_OVER do POINTS += 50
+					if !projectile_from_alien && !GAME_OVER do POINTS += 50
 					asteroid1 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
 					append(asteroids, asteroid1, asteroid2)
 				case .small:
-					if !GAME_OVER do POINTS += 100
+					if !projectile_from_alien && !GAME_OVER do POINTS += 100
 				}
 
 				unordered_remove(projectiles, i)
@@ -321,6 +376,161 @@ check_laser_collision :: proc(projectiles: ^[dynamic]Projectile, asteroids: ^[dy
 
 				return
 			}
+		}
+	}
+
+	if !projectile_from_alien {
+		for &projectile, i in projectiles {
+			collided := rl.CheckCollisionCircleRec(projectile.position, 2, alien.hit_box)
+			if collided {
+				POINTS += 200
+				unordered_remove(projectiles, i)
+				despawn_alien(alien)
+			}
+		}
+	}
+}
+
+Alien :: struct {
+	position:              rl.Vector2,
+	direction:             rl.Vector2,
+	change_direction_time: f64,
+	spawn_projectile_time: f64,
+	hit_box:               rl.Rectangle,
+	scale:                 f32,
+	inactive_time:         f64,
+	alive:                 bool,
+}
+
+init_alien :: proc() -> Alien {
+	alien := Alien {
+		position      = {99999, 99999},
+		direction     = {0, 0},
+		scale         = 30,
+		inactive_time = rl.GetTime(),
+		alive         = false,
+	}
+	alien.hit_box = rl.Rectangle {
+		alien.position.x - 0.7 * alien.scale,
+		alien.position.y - 0.4 * alien.scale,
+		1.4 * alien.scale,
+		0.8 * alien.scale,
+	}
+
+	return alien
+}
+
+spawn_alien :: proc(alien: ^Alien) {
+	alien.position = {300, 300}
+	alien.direction = {1, 0}
+	alien.inactive_time = rl.GetTime()
+	alien.alive = true
+	alien.hit_box = rl.Rectangle {
+		alien.position.x - 0.7 * alien.scale,
+		alien.position.y - 0.4 * alien.scale,
+		1.4 * alien.scale,
+		0.8 * alien.scale,
+	}
+}
+
+despawn_alien :: proc(alien: ^Alien) {
+	alien.position = {99999, 99999}
+	alien.direction = {0, 0}
+	alien.alive = false
+	alien.inactive_time = rl.GetTime()
+	alien.hit_box = rl.Rectangle {
+		alien.position.x - 0.7 * alien.scale,
+		alien.position.y - 0.4 * alien.scale,
+		1.4 * alien.scale,
+		0.8 * alien.scale,
+	}
+}
+
+draw_alien :: proc(alien: ^Alien) {
+	points: [6]rl.Vector2 = {{-1, 0}, {-0.7, 0.4}, {0.7, 0.4}, {1, 0}, {0.7, -0.4}, {-0.7, -0.4}}
+	for i in 0 ..< len(points) {
+		if i == len(points) - 1 do break
+		rl.DrawLineEx(
+			alien.position + points[i] * alien.scale,
+			alien.position + points[i + 1] * alien.scale,
+			2,
+			rl.WHITE,
+		)
+	}
+	rl.DrawLineEx(
+		alien.position + points[0] * alien.scale,
+		alien.position + points[len(points) - 1] * alien.scale,
+		2,
+		rl.WHITE,
+	)
+	rl.DrawLineEx(
+		alien.position + points[0] * alien.scale,
+		alien.position + points[3] * alien.scale,
+		2,
+		rl.WHITE,
+	)
+	rl.DrawCircleSectorLines(alien.position + {0, -0.4} * alien.scale, 10, -180, 0, 1, rl.WHITE)
+}
+
+update_alien :: proc(alien: ^Alien) {
+	if rl.GetTime() - alien.inactive_time > 10 && !alien.alive do spawn_alien(alien)
+	if alien.change_direction_time == 0 do alien.change_direction_time = rl.GetTime()
+	if rl.GetTime() - alien.change_direction_time > 0.5 {
+		x := f32(rl.GetRandomValue(-1, 1))
+		y := f32(rl.GetRandomValue(-1, 1))
+		if x == 0 && y == 0 do x = 1
+		alien.direction = {x, y}
+		alien.change_direction_time = 0
+	}
+	alien.position += 2 * alien.direction
+	alien.hit_box =  {
+		alien.position.x - 0.7 * alien.scale,
+		alien.position.y - 0.4 * alien.scale,
+		1.4 * alien.scale,
+		0.8 * alien.scale,
+	}
+}
+
+spawn_alien_projectile :: proc(
+	alien: ^Alien,
+	space_ship: ^Space_Ship,
+	alien_projectile_list: ^[dynamic]Projectile,
+) {
+	if alien.spawn_projectile_time == 0 do alien.spawn_projectile_time = rl.GetTime()
+	if rl.GetTime() - alien.spawn_projectile_time > 1 {
+		projectile := Projectile {
+			{alien.position.x, alien.position.y},
+			rl.Vector2Normalize(space_ship.position - alien.position),
+		}
+		append(alien_projectile_list, projectile)
+		alien.spawn_projectile_time = 0
+	}
+}
+
+update_alien_projectile_positions :: proc(
+	alien_projectiles: ^[dynamic]Projectile,
+	alien_projectile_speed: f32,
+) {
+	for &projectile in alien_projectiles {
+		projectile.position += alien_projectile_speed * projectile.direction
+	}
+}
+
+check_alien_collision :: proc(
+	alien: ^Alien,
+	space_ship: ^Space_Ship,
+	asteroid_list: ^[dynamic]Asteroid,
+) {
+	collided_with_asteroid := false
+	for &asteroid in asteroid_list {
+		collided_with_asteroid = rl.CheckCollisionCircleRec(
+			asteroid.position,
+			asteroid.radius,
+			alien.hit_box,
+		)
+		if collided_with_asteroid {
+			despawn_alien(alien)
+			return
 		}
 	}
 }
