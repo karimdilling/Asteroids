@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math"
+import "core:math/rand"
 import rl "vendor:raylib"
 
 SCREEN_WIDTH :: 1024
@@ -44,6 +45,7 @@ handle_game_over :: proc(
 	projectile_list: ^[dynamic]Projectile,
 	asteroid_list: ^[dynamic]Asteroid,
 	alien: ^Alien,
+	alien_projectile_list: ^[dynamic]Projectile,
 ) {
 	font_size: i32 = 50
 	text: cstring = "Game Over"
@@ -62,6 +64,7 @@ handle_game_over :: proc(
 	if player.death_time != 0.0 && rl.GetTime() - player.death_time > 3.0 {
 		clear(projectile_list)
 		clear(asteroid_list)
+		clear(alien_projectile_list)
 		player^ =  {
 			{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
 			0,
@@ -89,6 +92,7 @@ update_game :: proc(
 	}
 
 	handle_out_of_screen(player)
+	handle_out_of_screen_alien(alien)
 
 	dir_angle := player.angle - math.PI * 0.5
 	player.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
@@ -122,7 +126,7 @@ update_game :: proc(
 	}
 
 	if GAME_OVER {
-		handle_game_over(player, projectile_list, asteroid_list, alien)
+		handle_game_over(player, projectile_list, asteroid_list, alien, alien_projectile_list)
 	}
 }
 
@@ -421,8 +425,13 @@ init_alien :: proc() -> Alien {
 }
 
 spawn_alien :: proc(alien: ^Alien) {
-	alien.position = {300, 300}
-	alien.direction = {1, 0}
+	possible_x_start_pos: [2]f32 = {0, f32(rl.GetScreenWidth())}
+	alien.position =  {
+		rand.choice(possible_x_start_pos[:]),
+		f32(rl.GetRandomValue(200, rl.GetScreenHeight() - 200)),
+	}
+	if alien.position.x == possible_x_start_pos[0] do alien.direction = {1, 0}
+	else if alien.position.x == possible_x_start_pos[1] do alien.direction = {-1, 0}
 	alien.inactive_time = rl.GetTime()
 	alien.alive = true
 	alien.hit_box = rl.Rectangle {
@@ -475,12 +484,15 @@ draw_alien :: proc(alien: ^Alien) {
 update_alien :: proc(alien: ^Alien) {
 	if rl.GetTime() - alien.inactive_time > 10 && !alien.alive do spawn_alien(alien)
 	if alien.change_direction_time == 0 do alien.change_direction_time = rl.GetTime()
-	if rl.GetTime() - alien.change_direction_time > 0.5 {
-		x := f32(rl.GetRandomValue(-1, 1))
-		y := f32(rl.GetRandomValue(-1, 1))
-		if x == 0 && y == 0 do x = 1
-		alien.direction = {x, y}
-		alien.change_direction_time = 0
+	if !(alien.position.x < 300 && alien.direction.x == 1 ||
+		   alien.position.x > f32(rl.GetScreenWidth() - 300)) {
+		if rl.GetTime() - alien.change_direction_time > 0.5 {
+			x := f32(rl.GetRandomValue(-1, 1))
+			y := f32(rl.GetRandomValue(-1, 1))
+			if x == 0 && y == 0 do x = 1
+			alien.direction = {x, y}
+			alien.change_direction_time = 0
+		}
 	}
 	alien.position += 2 * alien.direction
 	alien.hit_box =  {
@@ -532,5 +544,20 @@ check_alien_collision :: proc(
 			despawn_alien(alien)
 			return
 		}
+	}
+}
+
+handle_out_of_screen_alien :: proc(alien: ^Alien) {
+	if alien.position.x == 99999 && alien.position.y == 99999 do return
+	if alien.position.x > f32(rl.GetScreenWidth()) {
+		alien.position.x = 0
+	} else if alien.position.x < 0 {
+		alien.position.x = f32(rl.GetScreenWidth())
+	}
+
+	if alien.position.y > f32(rl.GetScreenHeight()) {
+		alien.position.y = 0
+	} else if alien.position.y < 0 {
+		alien.position.y = f32(rl.GetScreenHeight())
 	}
 }
