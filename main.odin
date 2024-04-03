@@ -22,6 +22,7 @@ main :: proc() {
 		{0, 1},
 		{0, 0},
 		0,
+		true,
 	}
 	projectile_list := make([dynamic]Projectile)
 	defer delete(projectile_list)
@@ -33,9 +34,25 @@ main :: proc() {
 	generate_asteroids(&asteroid_list)
 	alien := init_alien()
 
+	start_game_time := rl.GetTime()
+
 	for !rl.WindowShouldClose() {
-		update_game(&player, &projectile_list, &asteroid_list, &alien, &alien_projectile_list)
-		draw_game(&player, &projectile_list, &asteroid_list, &alien, &alien_projectile_list)
+		update_game(
+			&player,
+			&projectile_list,
+			&asteroid_list,
+			&alien,
+			&alien_projectile_list,
+			&start_game_time,
+		)
+		draw_game(
+			&player,
+			&projectile_list,
+			&asteroid_list,
+			&alien,
+			&alien_projectile_list,
+			&start_game_time,
+		)
 		free_all(context.temp_allocator)
 	}
 }
@@ -46,6 +63,7 @@ handle_game_over :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
+	start_game_time: ^f64,
 ) {
 	font_size: i32 = 50
 	text: cstring = "Game Over"
@@ -71,12 +89,14 @@ handle_game_over :: proc(
 			{0, 1},
 			{0, 0},
 			0,
+			true,
 		}
 		generate_asteroids(asteroid_list)
 		player.death_time = 0
 		despawn_alien(alien)
 		POINTS = 0
 		GAME_OVER = false
+		start_game_time^ = rl.GetTime()
 	}
 }
 
@@ -86,6 +106,7 @@ update_game :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
+	start_game_time: ^f64,
 ) {
 	if len(asteroid_list) == 0 {
 		generate_asteroids(asteroid_list)
@@ -108,6 +129,7 @@ update_game :: proc(
 	update_alien_projectile_positions(alien_projectile_list, 5)
 
 	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list)
+	if rl.GetTime() - start_game_time^ > 2 do player.invincible = false
 	check_alien_collision(alien, player, asteroid_list)
 
 	if !GAME_OVER {
@@ -126,7 +148,14 @@ update_game :: proc(
 	}
 
 	if GAME_OVER {
-		handle_game_over(player, projectile_list, asteroid_list, alien, alien_projectile_list)
+		handle_game_over(
+			player,
+			projectile_list,
+			asteroid_list,
+			alien,
+			alien_projectile_list,
+			start_game_time,
+		)
 	}
 }
 
@@ -136,12 +165,13 @@ draw_game :: proc(
 	asteroids: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectiles: ^[dynamic]Projectile,
+	start_game_time: ^f64,
 ) {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
-	if !GAME_OVER do draw_space_ship(player)
+	if !GAME_OVER do draw_space_ship(player, start_game_time)
 	draw_projectiles(projectiles, rl.RED)
 	draw_asteroids(asteroids)
 	draw_alien(alien)
@@ -173,6 +203,7 @@ Space_Ship :: struct {
 	direction:  rl.Vector2,
 	velocity:   rl.Vector2,
 	death_time: f64,
+	invincible: bool,
 }
 
 check_space_ship_collision :: proc(
@@ -181,6 +212,8 @@ check_space_ship_collision :: proc(
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
 ) {
+	if space_ship.invincible do return
+
 	space_ship_radius: f32 = 5
 	for &asteroid in asteroid_list {
 		collided := rl.CheckCollisionCircles(
@@ -222,7 +255,17 @@ check_space_ship_collision :: proc(
 	}
 }
 
-draw_space_ship :: proc(space_ship: ^Space_Ship) {
+draw_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
+	should_blink :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) -> bool {
+		if space_ship.invincible {
+			if math.mod(rl.GetTime() - start_game_time^, 0.2) > 0.1 {
+				return true
+			}
+		}
+		return false
+	}
+
+	if should_blink(space_ship, start_game_time) do return
 	points: [3]rl.Vector2 = {{-1, 1}, {1, 1}, {0, -1}}
 	scale: f32 = 10
 	point1 := space_ship.position + rl.Vector2Rotate(points[0] * scale, space_ship.angle)
