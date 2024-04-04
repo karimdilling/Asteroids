@@ -141,6 +141,7 @@ update_game :: proc(
 		}
 		if rl.IsKeyDown(.UP) {
 			player.velocity += player.direction * 0.5
+			draw_thrust_for_space_ship(player, start_game_time)
 		}
 		if rl.IsKeyPressed(.SPACE) {
 			spawn_projectile(player, projectile_list)
@@ -214,7 +215,7 @@ check_space_ship_collision :: proc(
 ) {
 	if space_ship.invincible do return
 
-	space_ship_radius: f32 = 5
+	space_ship_radius: f32 = 9
 	for &asteroid in asteroid_list {
 		collided := rl.CheckCollisionCircles(
 			space_ship.position,
@@ -255,23 +256,45 @@ check_space_ship_collision :: proc(
 	}
 }
 
-draw_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
-	should_blink :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) -> bool {
-		if space_ship.invincible {
-			if math.mod(rl.GetTime() - start_game_time^, 0.2) > 0.1 {
-				return true
-			}
+should_blink :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) -> bool {
+	if space_ship.invincible {
+		if math.mod(rl.GetTime() - start_game_time^, 0.2) < 0.1 {
+			return true
 		}
-		return false
 	}
+	return false
+}
 
+draw_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
 	if should_blink(space_ship, start_game_time) do return
-	points: [3]rl.Vector2 = {{-1, 1}, {1, 1}, {0, -1}}
-	scale: f32 = 10
-	point1 := space_ship.position + rl.Vector2Rotate(points[0] * scale, space_ship.angle)
-	point2 := space_ship.position + rl.Vector2Rotate(points[1] * scale, space_ship.angle)
-	point3 := space_ship.position + rl.Vector2Rotate(points[2] * scale, space_ship.angle)
-	rl.DrawTriangleLines(point1, point2, point3, rl.WHITE)
+	scale: f32 = 15
+	points: [5]rl.Vector2 = {{-0.8, 1.0}, {0.0, -1.0}, {0.8, 1.0}, {0.4, 0.8}, {-0.4, 0.8}}
+	points *= scale
+	for i in 0 ..< len(points) {
+		rl.DrawLineEx(
+			space_ship.position + rl.Vector2Rotate(points[i], space_ship.angle),
+			space_ship.position +
+			rl.Vector2Rotate(points[(i + 1) % len(points)], space_ship.angle),
+			2,
+			rl.WHITE,
+		)
+	}
+}
+
+draw_thrust_for_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
+	if should_blink(space_ship, start_game_time) do return
+	scale: f32 = 15
+	thrust_points: [3]rl.Vector2 = {{0.4, 0.8}, {-0.4, 0.8}, {0.0, 1.2}}
+	thrust_points *= scale
+	for i in 0 ..< len(thrust_points) {
+		rl.DrawLineEx(
+			space_ship.position + rl.Vector2Rotate(thrust_points[i], space_ship.angle),
+			space_ship.position +
+			rl.Vector2Rotate(thrust_points[(i + 1) % len(thrust_points)], space_ship.angle),
+			2,
+			rl.WHITE,
+		)
+	}
 }
 
 Projectile :: struct {
