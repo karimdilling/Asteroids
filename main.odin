@@ -17,12 +17,12 @@ main :: proc() {
 	rl.SetTargetFPS(60)
 
 	player := Space_Ship {
-		{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
-		0,
-		{0, 1},
-		{0, 0},
-		0,
-		true,
+		position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+		angle      = 0,
+		direction  = {0, 1},
+		velocity   = {0, 0},
+		death_time = 0,
+		invincible = true,
 	}
 	projectile_list := make([dynamic]Projectile)
 	defer delete(projectile_list)
