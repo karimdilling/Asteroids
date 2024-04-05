@@ -320,12 +320,13 @@ draw_projectiles :: proc(projectile_list: ^[dynamic]Projectile, color: rl.Color)
 }
 
 Asteroid :: struct {
-	position: rl.Vector2,
-	velocity: rl.Vector2,
-	type:     Asteroid_Size,
-	radius:   f32,
-	sides:    i32,
-	angle:    f32,
+	position:           rl.Vector2,
+	velocity:           rl.Vector2,
+	type:               Asteroid_Size,
+	radius:             f32,
+	points:             [16]rl.Vector2,
+	angle:              f32,
+	rotation_direction: int,
 }
 
 Asteroid_Size :: enum {
@@ -344,8 +345,9 @@ generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {}) -> Asteroid {
 	position := position
 	velocity: rl.Vector2
-	angle := f32(rl.GetRandomValue(0, 360))
-	sides := rl.GetRandomValue(5, 10)
+	angle: f32 = 0
+	rotation_choices: [2]int = {-1, 1}
+	rotation_direction := rand.choice(rotation_choices[:])
 	radius: f32
 
 	switch type {
@@ -355,19 +357,33 @@ generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {})
 			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
 		}
 		velocity = {f32(rl.GetRandomValue(-2, 2)), f32(rl.GetRandomValue(-2, 2))}
-		radius = f32(rl.GetRandomValue(30, 50))
+		radius = 60
 	case .medium:
 		velocity = {f32(rl.GetRandomValue(-3, 3)), f32(rl.GetRandomValue(-3, 3))}
-		radius = f32(rl.GetRandomValue(20, 25))
+		radius = 35
 	case .small:
 		velocity = {f32(rl.GetRandomValue(-4, 4)), f32(rl.GetRandomValue(-4, 4))}
-		radius = f32(rl.GetRandomValue(10, 15))
+		radius = 15
+	}
+
+	points: [16]rl.Vector2
+	for i in 0 ..< len(points) {
+		random_radius_modifier: f32
+		switch type {
+		case .big:
+			random_radius_modifier = f32(rl.GetRandomValue(0, 20))
+		case .medium:
+			random_radius_modifier = f32(rl.GetRandomValue(0, 15))
+		case .small:
+			random_radius_modifier = f32(rl.GetRandomValue(0, 5))
+		}
+		points[i] = rl.Vector2Rotate({radius - random_radius_modifier, 0}, f32(i) * math.PI / 8)
 	}
 
 	if velocity.x == 0 do velocity.x = 1
 	if velocity.y == 0 do velocity.y = 1
 
-	return Asteroid{position, velocity, type, radius, sides, angle}
+	return Asteroid{position, velocity, type, radius, points, angle, rotation_direction}
 }
 
 update_asteroids :: proc(
@@ -377,7 +393,7 @@ update_asteroids :: proc(
 	alien: ^Alien,
 ) {
 	for &asteroid in asteroid_list {
-		asteroid.angle += 1
+		asteroid.angle += 0.01 * f32(asteroid.rotation_direction)
 		asteroid.position += asteroid.velocity
 		handle_out_of_screen_asteroids(&asteroid)
 	}
@@ -401,14 +417,15 @@ handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
 
 draw_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	for &asteroid in asteroid_list {
-		rl.DrawPolyLinesEx(
-			asteroid.position,
-			asteroid.sides,
-			asteroid.radius,
-			asteroid.angle,
-			asteroid.type == .big ? 3 : asteroid.type == .medium ? 2 : 1,
-			rl.WHITE,
-		)
+		for i in 0 ..< len(asteroid.points) {
+			rl.DrawLineEx(
+				asteroid.position + rl.Vector2Rotate(asteroid.points[i], asteroid.angle),
+				asteroid.position +
+				rl.Vector2Rotate(asteroid.points[(i + 1) % len(asteroid.points)], asteroid.angle),
+				asteroid.type == .big ? 3 : asteroid.type == .medium ? 2 : 1,
+				rl.WHITE,
+			)
+		}
 	}
 }
 
