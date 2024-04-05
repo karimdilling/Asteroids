@@ -431,11 +431,19 @@ check_laser_collision :: proc(
 					if !projectile_from_alien && !GAME_OVER do POINTS += 20
 					asteroid1 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.medium, asteroid.position)
+					if asteroid1.position == asteroid2.position &&
+					   asteroid1.velocity == asteroid2.velocity {
+						asteroid2.velocity = asteroid1.velocity + {1, 0}
+					}
 					append(asteroids, asteroid1, asteroid2)
 				case .medium:
 					if !projectile_from_alien && !GAME_OVER do POINTS += 50
 					asteroid1 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
 					asteroid2 := generate_single_asteroid(Asteroid_Size.small, asteroid.position)
+					if asteroid1.position == asteroid2.position &&
+					   asteroid1.velocity == asteroid2.velocity {
+						asteroid2.velocity = asteroid1.velocity + {1, 0}
+					}
 					append(asteroids, asteroid1, asteroid2)
 				case .small:
 					if !projectile_from_alien && !GAME_OVER do POINTS += 100
