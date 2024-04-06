@@ -83,13 +83,13 @@ handle_game_over :: proc(
 		clear(projectile_list)
 		clear(asteroid_list)
 		clear(alien_projectile_list)
-		player^ =  {
-			{f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
-			0,
-			{0, 1},
-			{0, 0},
-			0,
-			true,
+		player^ = {
+			position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+			angle      = 0,
+			direction  = {0, 1},
+			velocity   = {0, 0},
+			death_time = 0,
+			invincible = true,
 		}
 		generate_asteroids(asteroid_list)
 		player.death_time = 0
