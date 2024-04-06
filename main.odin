@@ -352,10 +352,10 @@ generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {})
 
 	switch type {
 	case .big:
-		position =  {
-			f32(rl.GetRandomValue(0, rl.GetScreenWidth())),
-			f32(rl.GetRandomValue(0, rl.GetScreenHeight())),
-		}
+		top_bottom_spawn := rl.Vector2{f32(rl.GetRandomValue(0, rl.GetScreenWidth())), 0}
+		left_right_spawn := rl.Vector2{0, f32(rl.GetRandomValue(0, rl.GetScreenHeight()))}
+		spawn_choices: [2]rl.Vector2 = {top_bottom_spawn, left_right_spawn}
+		position = rand.choice(spawn_choices[:])
 		velocity = {f32(rl.GetRandomValue(-2, 2)), f32(rl.GetRandomValue(-2, 2))}
 		radius = 60
 	case .medium:
