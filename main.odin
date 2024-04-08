@@ -16,14 +16,9 @@ main :: proc() {
 
 	rl.SetTargetFPS(60)
 
-	player := Space_Ship {
-		position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
-		angle      = 0,
-		direction  = {0, 1},
-		velocity   = {0, 0},
-		death_time = 0,
-		invincible = true,
-	}
+	player: Space_Ship
+	spawn_space_ship(&player)
+
 	projectile_list := make([dynamic]Projectile)
 	defer delete(projectile_list)
 	asteroid_list := make([dynamic]Asteroid)
@@ -87,14 +82,7 @@ handle_game_over :: proc(
 		clear(projectile_list)
 		clear(asteroid_list)
 		clear(alien_projectile_list)
-		player^ = {
-			position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
-			angle      = 0,
-			direction  = {0, 1},
-			velocity   = {0, 0},
-			death_time = 0,
-			invincible = true,
-		}
+		spawn_space_ship(player)
 		generate_asteroids(asteroid_list)
 		player.death_time = 0
 		despawn_alien(alien)
@@ -213,6 +201,17 @@ Space_Ship :: struct {
 	velocity:   rl.Vector2,
 	death_time: f64,
 	invincible: bool,
+}
+
+spawn_space_ship :: proc(space_ship: ^Space_Ship) {
+	space_ship^ = {
+		position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+		angle      = 0,
+		direction  = {0, 1},
+		velocity   = {0, 0},
+		death_time = 0,
+		invincible = true,
+	}
 }
 
 check_space_ship_collision :: proc(
