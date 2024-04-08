@@ -9,6 +9,7 @@ SCREEN_WIDTH :: 1024
 SCREEN_HEIGHT :: 768
 GAME_OVER := false
 POINTS := 0
+LIVES := 3
 
 main :: proc() {
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids")
@@ -31,8 +32,6 @@ main :: proc() {
 	generate_asteroids(&asteroid_list)
 	alien := init_alien()
 
-	start_game_time := rl.GetTime()
-
 	for !rl.WindowShouldClose() {
 		update_game(
 			&player,
@@ -40,7 +39,6 @@ main :: proc() {
 			&asteroid_list,
 			&alien,
 			&alien_projectile_list,
-			&start_game_time,
 			&particle_list,
 		)
 		draw_game(
@@ -49,7 +47,6 @@ main :: proc() {
 			&asteroid_list,
 			&alien,
 			&alien_projectile_list,
-			&start_game_time,
 			&particle_list,
 		)
 		free_all(context.temp_allocator)
@@ -62,7 +59,6 @@ handle_game_over :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
-	start_game_time: ^f64,
 ) {
 	font_size: i32 = 50
 	text: cstring = "Game Over"
@@ -87,8 +83,8 @@ handle_game_over :: proc(
 		player.death_time = 0
 		despawn_alien(alien)
 		POINTS = 0
+		LIVES = 3
 		GAME_OVER = false
-		start_game_time^ = rl.GetTime()
 	}
 }
 
@@ -98,7 +94,6 @@ update_game :: proc(
 	asteroid_list: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
-	start_game_time: ^f64,
 	particle_list: ^[dynamic]Particle,
 ) {
 	if len(asteroid_list) == 0 {
@@ -123,7 +118,7 @@ update_game :: proc(
 	update_particles(particle_list)
 
 	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list, particle_list)
-	if rl.GetTime() - start_game_time^ > 2 do player.invincible = false
+	if rl.GetTime() - player.spawn_time > 2 do player.invincible = false
 	check_alien_collision(alien, player, asteroid_list, particle_list)
 
 	if !GAME_OVER {
@@ -135,7 +130,7 @@ update_game :: proc(
 		}
 		if rl.IsKeyDown(.UP) {
 			player.velocity += player.direction * 0.5
-			draw_thrust_for_space_ship(player, start_game_time)
+			draw_thrust_for_space_ship(player)
 		}
 		if rl.IsKeyPressed(.SPACE) {
 			spawn_projectile(player, projectile_list)
@@ -143,14 +138,7 @@ update_game :: proc(
 	}
 
 	if GAME_OVER {
-		handle_game_over(
-			player,
-			projectile_list,
-			asteroid_list,
-			alien,
-			alien_projectile_list,
-			start_game_time,
-		)
+		handle_game_over(player, projectile_list, asteroid_list, alien, alien_projectile_list)
 	}
 }
 
@@ -160,24 +148,24 @@ draw_game :: proc(
 	asteroids: ^[dynamic]Asteroid,
 	alien: ^Alien,
 	alien_projectiles: ^[dynamic]Projectile,
-	start_game_time: ^f64,
 	particle_list: ^[dynamic]Particle,
 ) {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
-	if !GAME_OVER do draw_space_ship(player, start_game_time)
+	if !GAME_OVER do draw_space_ship(player)
 	draw_projectiles(projectiles, rl.RED)
 	draw_asteroids(asteroids)
 	draw_alien(alien)
 	draw_projectiles(alien_projectiles, rl.WHITE)
 	draw_particles(particle_list)
 	draw_points()
+	draw_lives()
 }
 
 draw_points :: proc() {
-	rl.DrawText(fmt.ctprintf("Points: %d", POINTS), 0, 0, 30, rl.WHITE)
+	rl.DrawText(fmt.ctprintf("Points: %d", POINTS), 10, 10, 30, rl.WHITE)
 }
 
 handle_out_of_screen :: proc(player: ^Space_Ship) {
@@ -199,6 +187,7 @@ Space_Ship :: struct {
 	angle:      f32,
 	direction:  rl.Vector2,
 	velocity:   rl.Vector2,
+	spawn_time: f64,
 	death_time: f64,
 	invincible: bool,
 }
@@ -209,6 +198,7 @@ spawn_space_ship :: proc(space_ship: ^Space_Ship) {
 		angle      = 0,
 		direction  = {0, 1},
 		velocity   = {0, 0},
+		spawn_time = rl.GetTime(),
 		death_time = 0,
 		invincible = true,
 	}
@@ -223,6 +213,14 @@ check_space_ship_collision :: proc(
 ) {
 	if space_ship.invincible do return
 
+	reset_space_ship :: proc(space_ship: ^Space_Ship, particle_list: ^[dynamic]Particle) {
+		LIVES -= 1
+		if LIVES == 0 do GAME_OVER = true
+		spawn_particles(particle_list, space_ship.position)
+		spawn_space_ship(space_ship)
+		space_ship.death_time = rl.GetTime()
+	}
+
 	space_ship_radius: f32 = 9
 	for &asteroid in asteroid_list {
 		collided := rl.CheckCollisionCircles(
@@ -232,9 +230,7 @@ check_space_ship_collision :: proc(
 			asteroid.radius,
 		)
 		if collided {
-			GAME_OVER = true
-			space_ship.death_time = rl.GetTime()
-			spawn_particles(particle_list, space_ship.position)
+			reset_space_ship(space_ship, particle_list)
 			return
 		}
 	}
@@ -247,10 +243,8 @@ check_space_ship_collision :: proc(
 			2,
 		)
 		if collided {
-			GAME_OVER = true
-			space_ship.death_time = rl.GetTime()
+			reset_space_ship(space_ship, particle_list)
 			unordered_remove(alien_projectile_list, i)
-			spawn_particles(particle_list, space_ship.position)
 			return
 		}
 	}
@@ -261,23 +255,21 @@ check_space_ship_collision :: proc(
 		alien.hit_box,
 	)
 	if collided_with_alien {
-		GAME_OVER = true
-		space_ship.death_time = rl.GetTime()
-		spawn_particles(particle_list, space_ship.position)
+		reset_space_ship(space_ship, particle_list)
 	}
 }
 
-should_blink :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) -> bool {
+should_blink :: proc(space_ship: ^Space_Ship) -> bool {
 	if space_ship.invincible {
-		if math.mod(rl.GetTime() - start_game_time^, 0.2) < 0.1 {
+		if math.mod(rl.GetTime() - space_ship.spawn_time, 0.2) < 0.1 {
 			return true
 		}
 	}
 	return false
 }
 
-draw_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
-	if should_blink(space_ship, start_game_time) do return
+draw_space_ship :: proc(space_ship: ^Space_Ship) {
+	if should_blink(space_ship) do return
 	scale: f32 = 15
 	points: [5]rl.Vector2 = {{-0.8, 1.0}, {0.0, -1.0}, {0.8, 1.0}, {0.4, 0.8}, {-0.4, 0.8}}
 	points *= scale
@@ -292,8 +284,8 @@ draw_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
 	}
 }
 
-draw_thrust_for_space_ship :: proc(space_ship: ^Space_Ship, start_game_time: ^f64) {
-	if should_blink(space_ship, start_game_time) do return
+draw_thrust_for_space_ship :: proc(space_ship: ^Space_Ship) {
+	if should_blink(space_ship) do return
 	scale: f32 = 15
 	thrust_points: [3]rl.Vector2 = {{0.4, 0.8}, {-0.4, 0.8}, {0.0, 1.2}}
 	thrust_points *= scale
@@ -707,5 +699,22 @@ update_particles :: proc(particles: ^[dynamic]Particle) {
 draw_particles :: proc(particle_list: ^[dynamic]Particle) {
 	for &particle in particle_list {
 		rl.DrawRectangleV(particle.position, 2, rl.WHITE)
+	}
+}
+
+draw_lives :: proc() {
+	scale: f32 = 12
+	points: [5]rl.Vector2 = {{-0.8, 1.0}, {0.0, -1.0}, {0.8, 1.0}, {0.4, 0.8}, {-0.4, 0.8}}
+	points *= scale
+	for life_index in 0 ..< LIVES {
+		start_pos := rl.Vector2{10 + scale + f32(life_index) * 30, 60}
+		for point_index in 0 ..< len(points) {
+			rl.DrawLineEx(
+				start_pos + points[point_index],
+				start_pos + points[(point_index + 1) % len(points)],
+				1,
+				rl.WHITE,
+			)
+		}
 	}
 }
