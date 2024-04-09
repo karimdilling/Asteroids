@@ -74,13 +74,12 @@ handle_game_over :: proc(
 		rl.RED,
 	)
 
-	if player.death_time != 0.0 && rl.GetTime() - player.death_time > 3.0 {
+	if rl.GetTime() - player.death_time > 3.0 {
 		clear(projectile_list)
 		clear(asteroid_list)
 		clear(alien_projectile_list)
 		spawn_space_ship(player)
 		generate_asteroids(asteroid_list)
-		player.death_time = 0
 		despawn_alien(alien)
 		POINTS = 0
 		LIVES = 3
@@ -121,7 +120,7 @@ update_game :: proc(
 	if rl.GetTime() - player.spawn_time > 2 do player.invincible = false
 	check_alien_collision(alien, player, asteroid_list, particle_list)
 
-	if !GAME_OVER {
+	if !GAME_OVER && !player.inactive {
 		if rl.IsKeyDown(.LEFT) {
 			player.angle -= rl.DEG2RAD * 5
 		}
@@ -139,6 +138,8 @@ update_game :: proc(
 
 	if GAME_OVER {
 		handle_game_over(player, projectile_list, asteroid_list, alien, alien_projectile_list)
+	} else {
+		potentially_reset_space_ship(player)
 	}
 }
 
@@ -154,7 +155,7 @@ draw_game :: proc(
 	defer rl.EndDrawing()
 
 	rl.ClearBackground(rl.BLACK)
-	if !GAME_OVER do draw_space_ship(player)
+	if !GAME_OVER && !player.inactive do draw_space_ship(player)
 	draw_projectiles(projectiles, rl.RED)
 	draw_asteroids(asteroids)
 	draw_alien(alien)
@@ -189,6 +190,7 @@ Space_Ship :: struct {
 	velocity:   rl.Vector2,
 	spawn_time: f64,
 	death_time: f64,
+	inactive:   bool,
 	invincible: bool,
 }
 
@@ -200,7 +202,14 @@ spawn_space_ship :: proc(space_ship: ^Space_Ship) {
 		velocity   = {0, 0},
 		spawn_time = rl.GetTime(),
 		death_time = 0,
+		inactive   = false,
 		invincible = true,
+	}
+}
+
+potentially_reset_space_ship :: proc(space_ship: ^Space_Ship) {
+	if space_ship.inactive && rl.GetTime() - space_ship.death_time > 1 {
+		spawn_space_ship(space_ship)
 	}
 }
 
@@ -218,6 +227,8 @@ check_space_ship_collision :: proc(
 		if LIVES == 0 do GAME_OVER = true
 		spawn_particles(particle_list, space_ship.position)
 		spawn_space_ship(space_ship)
+		space_ship.position = {99999, 99999}
+		space_ship.inactive = true
 		space_ship.death_time = rl.GetTime()
 	}
 
