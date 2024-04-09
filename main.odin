@@ -566,29 +566,39 @@ despawn_alien :: proc(alien: ^Alien) {
 }
 
 draw_alien :: proc(alien: ^Alien) {
-	points: [6]rl.Vector2 = {{-1, 0}, {-0.7, 0.4}, {0.7, 0.4}, {1, 0}, {0.7, -0.4}, {-0.7, -0.4}}
+	points: [6]rl.Vector2 =  {
+		{-0.9, 0},
+		{-0.5, 0.4},
+		{0.5, 0.4},
+		{0.9, 0},
+		{0.5, -0.3},
+		{-0.5, -0.3},
+	}
 	for i in 0 ..< len(points) {
-		if i == len(points) - 1 do break
 		rl.DrawLineEx(
 			alien.position + points[i] * alien.scale,
-			alien.position + points[i + 1] * alien.scale,
+			alien.position + points[(i + 1) % len(points)] * alien.scale,
 			2,
 			rl.WHITE,
 		)
 	}
 	rl.DrawLineEx(
 		alien.position + points[0] * alien.scale,
-		alien.position + points[len(points) - 1] * alien.scale,
-		2,
-		rl.WHITE,
-	)
-	rl.DrawLineEx(
-		alien.position + points[0] * alien.scale,
 		alien.position + points[3] * alien.scale,
 		2,
 		rl.WHITE,
 	)
-	rl.DrawCircleSectorLines(alien.position + {0, -0.4} * alien.scale, 10, -180, 0, 1, rl.WHITE)
+
+	head_points: [4]rl.Vector2 = {points[4], {0.3, -0.6}, {-0.3, -0.6}, points[5]}
+	for i in 0 ..< len(head_points) {
+		if i == len(head_points) - 1 do break
+		rl.DrawLineEx(
+			alien.position + head_points[i] * alien.scale,
+			alien.position + head_points[i + 1] * alien.scale,
+			2,
+			rl.WHITE,
+		)
+	}
 }
 
 update_alien :: proc(alien: ^Alien) {
