@@ -98,7 +98,7 @@ update_game :: proc(
 	alien_projectile_list: ^[dynamic]Projectile,
 	particle_list: ^[dynamic]Particle,
 ) {
-	if len(asteroid_list) == 0 {
+	if len(asteroid_list) == 0 && !alien.alive {
 		generate_asteroids(asteroid_list)
 	}
 
