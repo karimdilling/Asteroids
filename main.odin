@@ -105,13 +105,7 @@ update_game :: proc(
 	handle_out_of_screen(player)
 	handle_out_of_screen_alien(alien)
 
-	dir_angle := player.angle - math.PI * 0.5
-	player.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
-
-	DRAG :: 0.03
-	player.velocity *= (1 - DRAG)
-	player.position += player.velocity
-
+	update_space_ship(player)
 	update_projectile_positions(projectile_list, 10)
 	update_asteroids(asteroid_list, projectile_list, alien_projectile_list, alien, particle_list)
 	update_alien(alien)
@@ -120,7 +114,6 @@ update_game :: proc(
 	update_particles(particle_list)
 
 	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list, particle_list)
-	if rl.GetTime() - player.spawn_time > 2 do player.invincible = false
 	check_alien_collision(alien, player, asteroid_list, particle_list)
 
 	if !GAME_OVER && !player.inactive {
@@ -280,6 +273,17 @@ should_blink :: proc(space_ship: ^Space_Ship) -> bool {
 		}
 	}
 	return false
+}
+
+update_space_ship :: proc(space_ship: ^Space_Ship) {
+	dir_angle := space_ship.angle - math.PI * 0.5
+	space_ship.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
+
+	DRAG :: 0.03
+	space_ship.velocity *= (1 - DRAG)
+	space_ship.position += space_ship.velocity
+
+	if rl.GetTime() - space_ship.spawn_time > 2 do space_ship.invincible = false
 }
 
 draw_space_ship :: proc(space_ship: ^Space_Ship) {
