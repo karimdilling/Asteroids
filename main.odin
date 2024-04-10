@@ -10,6 +10,7 @@ SCREEN_HEIGHT :: 768
 GAME_OVER := false
 POINTS := 0
 LIVES := 3
+ASTEROID_NUMBER := 4
 
 main :: proc() {
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids")
@@ -80,6 +81,7 @@ handle_game_over :: proc(
 		clear(asteroid_list)
 		clear(alien_projectile_list)
 		spawn_space_ship(player)
+		ASTEROID_NUMBER = 4
 		generate_asteroids(asteroid_list)
 		despawn_alien(alien)
 		POINTS = 0
@@ -351,9 +353,12 @@ Asteroid_Size :: enum {
 }
 
 generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
-	for _ in 0 ..< 10 {
+	for _ in 0 ..< ASTEROID_NUMBER {
 		asteroid := generate_single_asteroid(Asteroid_Size.big)
 		append(asteroid_list, asteroid)
+	}
+	if ASTEROID_NUMBER < 10 {
+		ASTEROID_NUMBER += 1
 	}
 }
 
