@@ -30,7 +30,8 @@ main :: proc() {
 	defer delete(particle_list)
 
 	generate_asteroids(&asteroid_list)
-	alien := init_alien()
+	alien: Alien
+	init_alien(&alien, .big)
 
 	for !rl.WindowShouldClose() {
 		update_game(
@@ -496,7 +497,8 @@ check_laser_collision :: proc(
 		for &projectile, i in projectiles {
 			collided := rl.CheckCollisionCircleRec(projectile.position, 2, alien.hit_box)
 			if collided {
-				POINTS += 200
+				if alien.type == .big do POINTS += 200
+				else do POINTS += 1000
 				unordered_remove(projectiles, i)
 				spawn_particles(particle_list, alien.position)
 				despawn_alien(alien)
@@ -505,7 +507,13 @@ check_laser_collision :: proc(
 	}
 }
 
+Alien_Type :: enum {
+	big,
+	small,
+}
+
 Alien :: struct {
+	type:                  Alien_Type,
 	position:              rl.Vector2,
 	direction:             rl.Vector2,
 	change_direction_time: f64,
@@ -516,22 +524,20 @@ Alien :: struct {
 	alive:                 bool,
 }
 
-init_alien :: proc() -> Alien {
-	alien := Alien {
-		position      = {99999, 99999},
-		direction     = {0, 0},
-		scale         = 30,
-		inactive_time = rl.GetTime(),
-		alive         = false,
-	}
+init_alien :: proc(alien: ^Alien, alien_type: Alien_Type) {
+	alien.type = alien_type
+	alien.position = {99999, 99999}
+	alien.direction = {0, 0}
+	if alien_type == .big do alien.scale = 30
+	else do alien.scale = 15
+	alien.inactive_time = rl.GetTime()
+	alien.alive = false
 	alien.hit_box = rl.Rectangle {
 		alien.position.x - 0.7 * alien.scale,
 		alien.position.y - 0.4 * alien.scale,
 		1.4 * alien.scale,
 		0.8 * alien.scale,
 	}
-
-	return alien
 }
 
 spawn_alien :: proc(alien: ^Alien) {
@@ -553,6 +559,10 @@ spawn_alien :: proc(alien: ^Alien) {
 }
 
 despawn_alien :: proc(alien: ^Alien) {
+	if GAME_OVER do alien.type = .big
+	else do alien.type = rand.choice_enum(Alien_Type)
+	if alien.type == .big do alien.scale = 30
+	else do alien.scale = 15
 	alien.position = {99999, 99999}
 	alien.direction = {0, 0}
 	alien.alive = false
@@ -629,7 +639,10 @@ spawn_alien_projectile :: proc(
 	alien_projectile_list: ^[dynamic]Projectile,
 ) {
 	if alien.spawn_projectile_time == 0 do alien.spawn_projectile_time = rl.GetTime()
-	if rl.GetTime() - alien.spawn_projectile_time > 1 {
+	should_fire: bool
+	if alien.type == .big do should_fire = rl.GetTime() - alien.spawn_projectile_time > 1
+	else do should_fire = rl.GetTime() - alien.spawn_projectile_time > 0.7
+	if should_fire {
 		projectile := Projectile {
 			{alien.position.x, alien.position.y},
 			rl.Vector2Normalize(space_ship.position - alien.position),
