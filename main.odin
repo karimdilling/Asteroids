@@ -612,7 +612,15 @@ draw_alien :: proc(alien: ^Alien) {
 }
 
 update_alien :: proc(alien: ^Alien) {
-	if rl.GetTime() - alien.inactive_time > 10 && !alien.alive do spawn_alien(alien)
+	spawn_time: f64 = 10
+	if POINTS > 20000 do spawn_time = 5
+	else if POINTS > 10000 do spawn_time = 6
+	else if POINTS > 5000 do spawn_time = 7
+	else if POINTS > 2000 do spawn_time = 8
+	else if POINTS > 1000 do spawn_time = 9
+
+	should_spawn := rl.GetTime() - alien.inactive_time > spawn_time
+	if should_spawn && !alien.alive do spawn_alien(alien)
 	if alien.change_direction_time == 0 do alien.change_direction_time = rl.GetTime()
 	if !(alien.position.x < 300 && alien.direction.x == 1 ||
 		   alien.position.x > f32(rl.GetScreenWidth() - 300)) {
