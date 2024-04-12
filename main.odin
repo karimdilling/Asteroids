@@ -11,10 +11,15 @@ GAME_OVER := false
 POINTS := 0
 LIVES := 3
 ASTEROID_NUMBER := 4
+START_TIME := rl.GetTime()
 
 main :: proc() {
 	rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Asteroids")
 	defer rl.CloseWindow()
+
+	sound: Sound
+	init_audio(&sound)
+	defer deinit_audio(&sound)
 
 	rl.SetTargetFPS(60)
 
@@ -42,6 +47,7 @@ main :: proc() {
 			&alien,
 			&alien_projectile_list,
 			&particle_list,
+			&sound,
 		)
 		draw_game(
 			&player,
@@ -97,6 +103,7 @@ update_game :: proc(
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
 	particle_list: ^[dynamic]Particle,
+	sound: ^Sound,
 ) {
 	if len(asteroid_list) == 0 && !alien.alive {
 		generate_asteroids(asteroid_list)
@@ -107,14 +114,21 @@ update_game :: proc(
 
 	update_space_ship(player)
 	update_projectile_positions(projectile_list, 10)
-	update_asteroids(asteroid_list, projectile_list, alien_projectile_list, alien, particle_list)
-	update_alien(alien)
-	spawn_alien_projectile(alien, player, alien_projectile_list)
+	update_asteroids(
+		asteroid_list,
+		projectile_list,
+		alien_projectile_list,
+		alien,
+		particle_list,
+		&sound.explosion,
+	)
+	update_alien(alien, &sound.alien_alarm)
+	spawn_alien_projectile(alien, player, alien_projectile_list, &sound.projectile)
 	update_alien_projectile_positions(alien_projectile_list, 5)
 	update_particles(particle_list)
 
-	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list, particle_list)
-	check_alien_collision(alien, player, asteroid_list, particle_list)
+	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list, particle_list, &sound.explosion)
+	check_alien_collision(alien, player, asteroid_list, particle_list, &sound.explosion)
 
 	if !GAME_OVER && !player.inactive {
 		if rl.IsKeyDown(.LEFT) {
@@ -126,11 +140,18 @@ update_game :: proc(
 		if rl.IsKeyDown(.UP) {
 			player.velocity += player.direction * 0.5
 			draw_thrust_for_space_ship(player)
+			if !rl.IsSoundPlaying(sound.thrust) do rl.PlaySound(sound.thrust)
 		}
 		if rl.IsKeyPressed(.SPACE) {
+			rl.PlaySound(sound.projectile)
 			spawn_projectile(player, projectile_list)
 		}
 	}
+	if rl.IsKeyReleased(.UP) || player.inactive || GAME_OVER {
+		if rl.IsSoundPlaying(sound.thrust) do rl.StopSound(sound.thrust)
+	}
+
+	play_background_heartbeat(sound)
 
 	if GAME_OVER {
 		handle_game_over(player, projectile_list, asteroid_list, alien, alien_projectile_list)
@@ -215,6 +236,7 @@ check_space_ship_collision :: proc(
 	alien: ^Alien,
 	alien_projectile_list: ^[dynamic]Projectile,
 	particle_list: ^[dynamic]Particle,
+	explosion_sound: ^rl.Sound,
 ) {
 	if space_ship.invincible do return
 
@@ -237,6 +259,7 @@ check_space_ship_collision :: proc(
 			asteroid.radius,
 		)
 		if collided {
+			rl.PlaySound(explosion_sound^)
 			reset_space_ship(space_ship, particle_list)
 			return
 		}
@@ -250,6 +273,7 @@ check_space_ship_collision :: proc(
 			2,
 		)
 		if collided {
+			rl.PlaySound(explosion_sound^)
 			reset_space_ship(space_ship, particle_list)
 			unordered_remove(alien_projectile_list, i)
 			return
@@ -262,6 +286,7 @@ check_space_ship_collision :: proc(
 		alien.hit_box,
 	)
 	if collided_with_alien {
+		rl.PlaySound(explosion_sound^)
 		reset_space_ship(space_ship, particle_list)
 	}
 }
@@ -364,6 +389,7 @@ generate_asteroids :: proc(asteroid_list: ^[dynamic]Asteroid) {
 	if ASTEROID_NUMBER < 10 {
 		ASTEROID_NUMBER += 1
 	}
+	START_TIME = rl.GetTime()
 }
 
 generate_single_asteroid :: proc(type: Asteroid_Size, position: rl.Vector2 = {}) -> Asteroid {
@@ -416,14 +442,29 @@ update_asteroids :: proc(
 	alien_projectile_list: ^[dynamic]Projectile,
 	alien: ^Alien,
 	particle_list: ^[dynamic]Particle,
+	explosion_sound: ^rl.Sound,
 ) {
 	for &asteroid in asteroid_list {
 		asteroid.angle += 0.01 * f32(asteroid.rotation_direction)
 		asteroid.position += asteroid.velocity
 		handle_out_of_screen_asteroids(&asteroid)
 	}
-	check_laser_collision(projectile_list, asteroid_list, false, alien, particle_list)
-	check_laser_collision(alien_projectile_list, asteroid_list, true, nil, particle_list)
+	check_laser_collision(
+		projectile_list,
+		asteroid_list,
+		false,
+		alien,
+		particle_list,
+		explosion_sound,
+	)
+	check_laser_collision(
+		alien_projectile_list,
+		asteroid_list,
+		true,
+		nil,
+		particle_list,
+		explosion_sound,
+	)
 }
 
 handle_out_of_screen_asteroids :: proc(asteroid: ^Asteroid) {
@@ -460,6 +501,7 @@ check_laser_collision :: proc(
 	projectile_from_alien: bool = false,
 	alien: ^Alien,
 	particle_list: ^[dynamic]Particle,
+	explosion_sound: ^rl.Sound,
 ) {
 	for &projectile, i in projectiles {
 		for &asteroid, j in asteroids {
@@ -492,6 +534,7 @@ check_laser_collision :: proc(
 					if !projectile_from_alien && !GAME_OVER do POINTS += 100
 				}
 
+				rl.PlaySound(explosion_sound^)
 				spawn_particles(particle_list, asteroid.position)
 
 				unordered_remove(projectiles, i)
@@ -508,6 +551,7 @@ check_laser_collision :: proc(
 			if collided {
 				if alien.type == .big do POINTS += 200
 				else do POINTS += 1000
+				rl.PlaySound(explosion_sound^)
 				unordered_remove(projectiles, i)
 				spawn_particles(particle_list, alien.position)
 				despawn_alien(alien)
@@ -620,7 +664,7 @@ draw_alien :: proc(alien: ^Alien) {
 	}
 }
 
-update_alien :: proc(alien: ^Alien) {
+update_alien :: proc(alien: ^Alien, alien_alarm: ^rl.Sound) {
 	spawn_time: f64 = 10
 	if POINTS > 20000 do spawn_time = 5
 	else if POINTS > 10000 do spawn_time = 6
@@ -648,24 +692,28 @@ update_alien :: proc(alien: ^Alien) {
 		1.4 * alien.scale,
 		0.8 * alien.scale,
 	}
+
+	if alien.alive && !rl.IsSoundPlaying(alien_alarm^) do rl.PlaySound(alien_alarm^)
 }
 
 spawn_alien_projectile :: proc(
 	alien: ^Alien,
 	space_ship: ^Space_Ship,
 	alien_projectile_list: ^[dynamic]Projectile,
+	projectile_sound: ^rl.Sound,
 ) {
 	if alien.spawn_projectile_time == 0 do alien.spawn_projectile_time = rl.GetTime()
 	should_fire: bool
 	if alien.type == .big do should_fire = rl.GetTime() - alien.spawn_projectile_time > 1
 	else do should_fire = rl.GetTime() - alien.spawn_projectile_time > 0.7
-	if should_fire {
+	if should_fire && alien.alive {
 		projectile := Projectile {
 			{alien.position.x, alien.position.y},
 			rl.Vector2Normalize(space_ship.position - alien.position),
 		}
 		append(alien_projectile_list, projectile)
 		alien.spawn_projectile_time = 0
+		rl.PlaySound(projectile_sound^)
 	}
 }
 
@@ -683,6 +731,7 @@ check_alien_collision :: proc(
 	space_ship: ^Space_Ship,
 	asteroid_list: ^[dynamic]Asteroid,
 	particle_list: ^[dynamic]Particle,
+	explosion_sound: ^rl.Sound,
 ) {
 	collided_with_asteroid := false
 	for &asteroid in asteroid_list {
@@ -692,6 +741,7 @@ check_alien_collision :: proc(
 			alien.hit_box,
 		)
 		if collided_with_asteroid {
+			rl.PlaySound(explosion_sound^)
 			spawn_particles(particle_list, alien.position)
 			despawn_alien(alien)
 			return
@@ -767,5 +817,54 @@ draw_lives :: proc() {
 				rl.WHITE,
 			)
 		}
+	}
+}
+
+Sound :: struct {
+	projectile:     rl.Sound,
+	explosion:      rl.Sound,
+	thrust:         rl.Sound,
+	alien_alarm:    rl.Sound,
+	heartbeat_low:  rl.Sound,
+	heartbeat_high: rl.Sound,
+}
+
+init_audio :: proc(sound: ^Sound) {
+	rl.InitAudioDevice()
+	sound.projectile = rl.LoadSound("./audio/laser.wav")
+	sound.explosion = rl.LoadSound("./audio/explosion.wav")
+	sound.thrust = rl.LoadSound("./audio/thrust.wav")
+	sound.alien_alarm = rl.LoadSound("./audio/alien_alarm.wav")
+	sound.heartbeat_low = rl.LoadSound("./audio/heartbeat_low.wav")
+	sound.heartbeat_high = rl.LoadSound("./audio/heartbeat_high.wav")
+}
+
+deinit_audio :: proc(sound: ^Sound) {
+	rl.UnloadSound(sound.projectile)
+	rl.UnloadSound(sound.explosion)
+	rl.UnloadSound(sound.thrust)
+	rl.UnloadSound(sound.alien_alarm)
+	rl.UnloadSound(sound.heartbeat_low)
+	rl.UnloadSound(sound.heartbeat_high)
+	rl.CloseAudioDevice()
+}
+
+play_background_heartbeat :: proc(sound: ^Sound) {
+	play_sound: bool
+	play_speed := [?]f64{1, 0.5, 0.25}
+	speed_index := 0
+	current_time := rl.GetTime()
+	if current_time - START_TIME > 20 do speed_index = 2
+	else if current_time - START_TIME > 10 do speed_index = 1
+	if math.mod(current_time, play_speed[speed_index]) < f64(rl.GetFrameTime()) {
+		play_sound = true
+	}
+	if play_sound {
+		heartbeats := [2]rl.Sound{sound.heartbeat_low, sound.heartbeat_high}
+		@(static)
+		i := 0
+		if i == 0 do i = 1
+		else do i = 0
+		rl.PlaySound(heartbeats[i])
 	}
 }
