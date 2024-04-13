@@ -114,6 +114,7 @@ update_game :: proc(
 
 	update_space_ship(player)
 	update_projectile_positions(projectile_list, 10)
+	despawn_projectiles(projectile_list)
 	update_asteroids(
 		asteroid_list,
 		projectile_list,
@@ -124,7 +125,8 @@ update_game :: proc(
 	)
 	update_alien(alien, &sound.alien_alarm)
 	spawn_alien_projectile(alien, player, alien_projectile_list, &sound.projectile)
-	update_alien_projectile_positions(alien_projectile_list, 5)
+	update_alien_projectile_positions(alien_projectile_list, 10)
+	despawn_projectiles(alien_projectile_list)
 	update_particles(particle_list)
 
 	if !GAME_OVER do check_space_ship_collision(player, asteroid_list, alien, alien_projectile_list, particle_list, &sound.explosion)
@@ -344,18 +346,37 @@ draw_thrust_for_space_ship :: proc(space_ship: ^Space_Ship) {
 }
 
 Projectile :: struct {
-	position:  rl.Vector2,
-	direction: rl.Vector2,
+	position:   rl.Vector2,
+	direction:  rl.Vector2,
+	time_alive: f64,
 }
 
 spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
-	projectile := Projectile{{space_ship.position.x, space_ship.position.y}, space_ship.direction}
+	projectile := Projectile {
+		{space_ship.position.x, space_ship.position.y},
+		space_ship.direction,
+		rl.GetTime(),
+	}
 	append(projectile_list, projectile)
 }
 
 update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectile_speed: f32) {
 	for &projectile in projectiles {
+		if projectile.position.x < 0 do projectile.position.x = f32(rl.GetScreenWidth())
+		if projectile.position.y < 0 do projectile.position.y = f32(rl.GetScreenHeight())
+		if projectile.position.x > f32(rl.GetScreenWidth()) do projectile.position.x = 0
+		if projectile.position.y > f32(rl.GetScreenHeight()) do projectile.position.y = 0
 		projectile.position += projectile_speed * projectile.direction
+	}
+}
+
+despawn_projectiles :: proc(projectiles: ^[dynamic]Projectile, is_from_alien := false) {
+	now := rl.GetTime()
+	for i := 0; i < len(projectiles); i += 1 {
+		if now - projectiles[i].time_alive > 1 {
+			unordered_remove(projectiles, i)
+			i -= 1
+		}
 	}
 }
 
@@ -710,6 +731,7 @@ spawn_alien_projectile :: proc(
 		projectile := Projectile {
 			{alien.position.x, alien.position.y},
 			rl.Vector2Normalize(space_ship.position - alien.position),
+			rl.GetTime(),
 		}
 		append(alien_projectile_list, projectile)
 		alien.spawn_projectile_time = 0
