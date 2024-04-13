@@ -175,7 +175,7 @@ draw_game :: proc(
 
 	rl.ClearBackground(rl.BLACK)
 	if !GAME_OVER && !player.inactive do draw_space_ship(player)
-	draw_projectiles(projectiles, rl.RED)
+	draw_projectiles(projectiles, rl.WHITE)
 	draw_asteroids(asteroids)
 	draw_alien(alien)
 	draw_projectiles(alien_projectiles, rl.WHITE)
