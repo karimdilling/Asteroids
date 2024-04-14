@@ -113,7 +113,7 @@ update_game :: proc(
 	handle_out_of_screen_alien(alien)
 
 	update_space_ship(player)
-	update_projectile_positions(projectile_list, 10)
+	update_projectile_positions(projectile_list, 7)
 	despawn_projectiles(projectile_list)
 	update_asteroids(
 		asteroid_list,
@@ -125,7 +125,7 @@ update_game :: proc(
 	)
 	update_alien(alien, &sound.alien_alarm)
 	spawn_alien_projectile(alien, player, alien_projectile_list, &sound.projectile)
-	update_alien_projectile_positions(alien_projectile_list, 10)
+	update_alien_projectile_positions(alien_projectile_list, 7)
 	despawn_projectiles(alien_projectile_list)
 	update_particles(particle_list)
 
@@ -140,7 +140,7 @@ update_game :: proc(
 			player.angle += rl.DEG2RAD * 5
 		}
 		if rl.IsKeyDown(.UP) {
-			player.velocity += player.direction * 0.5
+			player.velocity += player.direction * 0.15
 			draw_thrust_for_space_ship(player)
 			if !rl.IsSoundPlaying(sound.thrust) do rl.PlaySound(sound.thrust)
 		}
@@ -306,7 +306,7 @@ update_space_ship :: proc(space_ship: ^Space_Ship) {
 	dir_angle := space_ship.angle - math.PI * 0.5
 	space_ship.direction = rl.Vector2{math.cos(dir_angle), math.sin(dir_angle)}
 
-	DRAG :: 0.03
+	DRAG :: 0.015
 	space_ship.velocity *= (1 - DRAG)
 	space_ship.position += space_ship.velocity
 
@@ -373,7 +373,7 @@ update_projectile_positions :: proc(projectiles: ^[dynamic]Projectile, projectil
 despawn_projectiles :: proc(projectiles: ^[dynamic]Projectile, is_from_alien := false) {
 	now := rl.GetTime()
 	for i := 0; i < len(projectiles); i += 1 {
-		if now - projectiles[i].time_alive > 1 {
+		if now - projectiles[i].time_alive > 1.25 {
 			unordered_remove(projectiles, i)
 			i -= 1
 		}
