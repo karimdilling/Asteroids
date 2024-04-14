@@ -72,14 +72,14 @@ handle_game_over :: proc(
 	text: cstring = "Game Over"
 	horizontal_center := rl.GetScreenWidth() / 2 - rl.MeasureText(text, font_size) / 2
 	vertical_center := rl.GetScreenHeight() / 2 - font_size / 2
-	rl.DrawText(text, horizontal_center, vertical_center, font_size, rl.RED)
+	rl.DrawText(text, horizontal_center, vertical_center, font_size, rl.WHITE)
 	points_reached_text := fmt.ctprintf("Points: %d", POINTS)
 	rl.DrawText(
 		points_reached_text,
 		horizontal_center,
 		vertical_center + font_size,
 		font_size,
-		rl.RED,
+		rl.WHITE,
 	)
 
 	if rl.GetTime() - player.death_time > 3.0 {
