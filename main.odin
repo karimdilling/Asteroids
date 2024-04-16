@@ -203,26 +203,30 @@ handle_out_of_screen :: proc(player: ^Space_Ship) {
 }
 
 Space_Ship :: struct {
-	position:   rl.Vector2,
-	angle:      f32,
-	direction:  rl.Vector2,
-	velocity:   rl.Vector2,
-	spawn_time: f64,
-	death_time: f64,
-	inactive:   bool,
-	invincible: bool,
+	position:       rl.Vector2,
+	scale:          f32,
+	front_position: rl.Vector2,
+	angle:          f32,
+	direction:      rl.Vector2,
+	velocity:       rl.Vector2,
+	spawn_time:     f64,
+	death_time:     f64,
+	inactive:       bool,
+	invincible:     bool,
 }
 
 spawn_space_ship :: proc(space_ship: ^Space_Ship) {
 	space_ship^ = {
-		position   = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
-		angle      = 0,
-		direction  = {0, 1},
-		velocity   = {0, 0},
-		spawn_time = rl.GetTime(),
-		death_time = 0,
-		inactive   = false,
-		invincible = true,
+		position       = {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() / 2)},
+		scale          = 15,
+		front_position = space_ship.position + rl.Vector2{0, -1} * space_ship.scale,
+		angle          = 0,
+		direction      = {0, 1},
+		velocity       = {0, 0},
+		spawn_time     = rl.GetTime(),
+		death_time     = 0,
+		inactive       = false,
+		invincible     = true,
 	}
 }
 
@@ -309,15 +313,17 @@ update_space_ship :: proc(space_ship: ^Space_Ship) {
 	DRAG :: 0.015
 	space_ship.velocity *= (1 - DRAG)
 	space_ship.position += space_ship.velocity
+	space_ship.front_position =
+		space_ship.position +
+		rl.Vector2Rotate(rl.Vector2{0, -1} * space_ship.scale, space_ship.angle)
 
 	if rl.GetTime() - space_ship.spawn_time > 2 do space_ship.invincible = false
 }
 
 draw_space_ship :: proc(space_ship: ^Space_Ship) {
 	if should_blink(space_ship) do return
-	scale: f32 = 15
 	points: [5]rl.Vector2 = {{-0.8, 1.0}, {0.0, -1.0}, {0.8, 1.0}, {0.4, 0.8}, {-0.4, 0.8}}
-	points *= scale
+	points *= space_ship.scale
 	for i in 0 ..< len(points) {
 		rl.DrawLineEx(
 			space_ship.position + rl.Vector2Rotate(points[i], space_ship.angle),
@@ -331,9 +337,8 @@ draw_space_ship :: proc(space_ship: ^Space_Ship) {
 
 draw_thrust_for_space_ship :: proc(space_ship: ^Space_Ship) {
 	if should_blink(space_ship) do return
-	scale: f32 = 15
 	thrust_points: [3]rl.Vector2 = {{0.4, 0.8}, {-0.4, 0.8}, {0.0, 1.2}}
-	thrust_points *= scale
+	thrust_points *= space_ship.scale
 	for i in 0 ..< len(thrust_points) {
 		rl.DrawLineEx(
 			space_ship.position + rl.Vector2Rotate(thrust_points[i], space_ship.angle),
@@ -352,11 +357,7 @@ Projectile :: struct {
 }
 
 spawn_projectile :: proc(space_ship: ^Space_Ship, projectile_list: ^[dynamic]Projectile) {
-	projectile := Projectile {
-		{space_ship.position.x, space_ship.position.y},
-		space_ship.direction,
-		rl.GetTime(),
-	}
+	projectile := Projectile{space_ship.front_position, space_ship.direction, rl.GetTime()}
 	append(projectile_list, projectile)
 }
 
